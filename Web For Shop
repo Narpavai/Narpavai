@@ -1,0 +1,160 @@
+mkdir cloth-shopping-website
+cd cloth-shopping-website
+npm init -y
+npm install express mongoose dotenv bcryptjs express-session ejs body-parser
+npm install nodemon --save-dev
+
+
+"scripts": {
+  "start": "nodemon app.js"
+}
+
+
+require('dotenv').config();
+const express = require('express');
+const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+const session = require('express-session');
+const bodyParser = require('body-parser');
+const app = express();
+
+// Middleware
+app.set('view engine', 'ejs');
+app.use(express.static('public'));
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(session({ secret: 'your_secret', resave: false, saveUninitialized: true }));
+
+// MongoDB Connection
+mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+
+// Schemas
+const UserSchema = new mongoose.Schema({
+  username: String,
+  password: String,
+});
+
+const ProductSchema = new mongoose.Schema({
+  name: String,
+  price: Number,
+  image: String,
+});
+
+const User = mongoose.model('User', UserSchema);
+const Product = mongoose.model('Product', ProductSchema);
+
+// Routes
+app.get('/', async (req, res) => {
+  const products = await Product.find();
+  res.render('index', { products });
+});
+
+app.get('/register', (req, res) => res.render('register'));
+app.post('/register', async (req, res) => {
+  const hashedPassword = await bcrypt.hash(req.body.password, 10);
+  await User.create({ username: req.body.username, password: hashedPassword });
+  res.redirect('/login');
+});
+
+app.get('/login', (req, res) => res.render('login'));
+app.post('/login', async (req, res) => {
+  const user = await User.findOne({ username: req.body.username });
+  if (user && (await bcrypt.compare(req.body.password, user.password))) {
+    req.session.user = user;
+    res.redirect('/');
+  } else {
+    res.redirect('/login');
+  }
+});
+
+app.get('/cart', (req, res) => {
+  if (!req.session.cart) req.session.cart = [];
+  res.render('cart', { cart: req.session.cart });
+});
+
+app.post('/cart', (req, res) => {
+  const item = req.body;
+  if (!req.session.cart) req.session.cart = [];
+  req.session.cart.push(item);
+  res.redirect('/cart');
+});
+
+app.listen(3000, () => console.log('Server running on http://localhost:3000'));
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <h1>Clothing Shop</h1>
+  <div class="products">
+    <% products.forEach(product => { %>
+      <div class="product">
+        <img src="<%= product.image %>" alt="<%= product.name %>">
+        <h2><%= product.name %></h2>
+        <p>$<%= product.price %></p>
+        <form action="/cart" method="post">
+          <input type="hidden" name="name" value="<%= product.name %>">
+          <input type="hidden" name="price" value="<%= product.price %>">
+          <button type="submit">Add to Cart</button>
+        </form>
+      </div>
+    <% }) %>
+  </div>
+</body>
+</html>
+
+
+<form action="/register" method="post">
+  <input type="text" name="username" placeholder="Username" required>
+  <input type="password" name="password" placeholder="Password" required>
+  <button type="submit">Register</button>
+</form>
+
+
+<form action="/login" method="post">
+  <input type="text" name="username" placeholder="Username" required>
+  <input type="password" name="password" placeholder="Password" required>
+  <button type="submit">Login</button>
+</form>
+
+
+<h1>Your Cart</h1>
+<ul>
+  <% cart.forEach(item => { %>
+    <li><%= item.name %> - $<%= item.price %></li>
+  <% }) %>
+</ul>
+<a href="/">Back to Shopping</a>
+
+
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+}
+.products {
+  display: flex;
+  flex-wrap: wrap;
+}
+.product {
+  border: 1px solid #ddd;
+  margin: 10px;
+  padding: 10px;
+  width: 200px;
+}
+.product img {
+  width: 100%;
+  height: auto;
+}
+
+
+MONGO_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/cloth-shop
+
+
+const products = [
+  { name: 'T-Shirt', price: 19.99, image: '/images/tshirt.jpg' },
+  { name: 'Jeans', price: 49.99, image: '/images/jeans.jpg' },
+];
+Product.insertMany(products);
